@@ -19,6 +19,10 @@ DB_PASS   = os.getenv("DB_PASS")
 VIEW_VENDAS  = os.getenv("VIEW_VENDAS",  "dbo.VW_MULTFOCO_VENDAS")
 VIEW_ESTOQUE = os.getenv("VIEW_ESTOQUE", "dbo.VW_MULTIFOCO_ESTOQUE")
 
+# --- Configurações de Filtros ---
+CNPJS_PERMITIDOS_ENV = os.getenv("CNPJS_PERMITIDOS")
+CNPJS_PERMITIDOS_LIST = [c.strip() for c in CNPJS_PERMITIDOS_ENV.split(",") if c.strip()]
+
 # --- Pasta de destino dos arquivos baixados ---
 DIRETORIO_IMPORTS = "imports"
 
@@ -189,7 +193,7 @@ def filtrar_vendas_periodo_atual(caminho_venda_bruto: str) -> str:
 
         # Filtrar por CNPJ específico (Coluna 4, Índice 3)
         INDICE_CNPJ = 3
-        cnpjs_permitidos = ['63400543000388', '28934740000114']
+        cnpjs_permitidos = CNPJS_PERMITIDOS_LIST
         
         # Garantir que a coluna de CNPJ não tenha espaços invisíveis ou nulos
         df_filtrado[INDICE_CNPJ] = df_filtrado[INDICE_CNPJ].astype(str).str.strip()
@@ -271,7 +275,7 @@ def filtrar_estoque_atual(caminho_estoque_bruto: str) -> str:
 
         # # Filtrar por CNPJ específico (Coluna 1, Índice 0)
         INDICE_CNPJ = 0
-        cnpjs_permitidos = ['63400543000388', '28934740000114']
+        cnpjs_permitidos = CNPJS_PERMITIDOS_LIST
         
         # Garantir que a coluna de CNPJ não tenha espaços invisíveis ou nulos
         df_filtrado[INDICE_CNPJ] = df_filtrado[INDICE_CNPJ].astype(str).str.strip()
