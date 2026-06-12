@@ -1,5 +1,8 @@
+# O nome do serviço é genérico ('app'). A diferenciação entre instâncias
+# é feita pelo COMPOSE_PROJECT_NAME, IMAGE_NAME e CONTAINER_NAME no .env.
+# Ex: COMPOSE_PROJECT_NAME=cesar-nova-ba → projeto isolado "cesar-nova-ba"
 services:
-  nova-app:
+  app:
     build: 
       context: .
       dockerfile: Dockerfile

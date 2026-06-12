@@ -22,6 +22,16 @@ def ler_csv_sem_header(caminho_arquivo):
             encoding='latin-1' # Se houver erro de acento, mude para 'latin-1'
         )
         return df
+    except pd.errors.EmptyDataError:
+        print(f"Aviso: O arquivo está vazio ou não possui colunas para ler: {caminho_arquivo}")
+        return None
     except Exception as e:
         print(f"Falha em latin-1, tentando encoding alternativo para {caminho_arquivo}")
-        return pd.read_csv(caminho_arquivo, sep=';', header=None, dtype=str, encoding='ISO-8859-1')
+        try:
+            return pd.read_csv(caminho_arquivo, sep=';', header=None, dtype=str, encoding='ISO-8859-1')
+        except pd.errors.EmptyDataError:
+            print(f"Aviso: O arquivo está vazio ou não possui colunas para ler: {caminho_arquivo}")
+            return None
+        except Exception as fallback_e:
+            print(f"Erro ao ler arquivo {caminho_arquivo} com encoding alternativo: {fallback_e}")
+            return None
