@@ -1,149 +1,46 @@
 import pandas as pd
-import os
-import glob
 from datetime import datetime
 
-def preencher_data_entrada(df_final):
+def preencher_data_entrada(df_final, df_estoque):
     """
-    Atualiza a 'Data Entrada' baseada no ESTOQUE.csv.
-    Verifica se houve aumento de estoque decorrente da entrada de um lote diferente 
-    comparando com o último Estoque.csv arquivado.
-    Se não, mantém a do arquivo XLSX anterior.
+    Atualiza a 'Data Entrada' pegando a data mais recente na coluna 5 (índice 4) 
+    do dataframe ESTOQUE, agrupado por EAN.
+    Formato na base: aaaa/mm/dd
+    Formato de saída: dd/mm/aa
     """
     try:
-        data_hoje = datetime.now().strftime('%d/%m/%Y')
+        data_hoje = datetime.now().strftime('%d/%m/%y')
+        mapa_datas = {}
         
-        # 1. Obter o relatório XLSX anterior para pegar as datas e estoque totais mantidos
-        diretorio_saida = 'output'
-        #Busca recursivamente, já que os relatórios estão sendo organizados em pastas de Mês/Dia
-        padrao_busca = os.path.join(diretorio_saida, "**", "*.xlsx")
-        arquivos_xlsx = glob.glob(padrao_busca, recursive=True)
-        
-        # Filtra arquivos temporários gerados com o Excel aberto
-        arquivos_xlsx = [f for f in arquivos_xlsx if not os.path.basename(f).startswith("~$")]
-        
-        df_anterior = None
-        
-        if arquivos_xlsx:
-            arquivos_xlsx.sort(key=os.path.getmtime)
-            # Pega o arquivo XLSX mais novo (o do processo anterior ao atual)
-            arquivo_anterior_xlsx = arquivos_xlsx[-1] 
-            df_anterior = pd.read_excel(arquivo_anterior_xlsx)
+        if df_estoque is not None and not df_estoque.empty and len(df_estoque.columns) > 4:
+            df_validos = df_estoque.dropna(subset=[1, 4]).copy()
             
-            if 'EAN' in df_anterior.columns:
-                df_anterior['EAN'] = df_anterior['EAN'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-            if 'Estoque' in df_anterior.columns:
-                df_anterior['Estoque'] = pd.to_numeric(df_anterior['Estoque'], errors='coerce').fillna(0)
+            # EAN está no índice 1
+            df_validos[1] = df_validos[1].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+            
+            # A data está no índice 4 (aaaa/mm/dd)
+            df_validos['data_dt'] = pd.to_datetime(df_validos[4], errors='coerce')
+            
+            df_validos = df_validos.dropna(subset=['data_dt'])
+            
+            if not df_validos.empty:
+                # Pegar a data máxima por EAN
+                max_dates = df_validos.groupby(1)['data_dt'].max()
+                
+                # Formatar para dd/mm/aa (%d/%m/%y)
+                for ean, max_date in max_dates.items():
+                    mapa_datas[ean] = max_date.strftime('%d/%m/%y')
 
-        # 2. Ler o ESTOQUE.csv atual (da pasta imports)
-        # Conforme especificado: O lote está no índice [2] e o estoque em [4]
-        caminho_estoque_atual = os.path.join('imports', 'ESTOQUE.csv')
-        df_est_atual = pd.DataFrame()
-        if os.path.exists(caminho_estoque_atual):
-            df_est_atual = pd.read_csv(caminho_estoque_atual, header=None, sep=';', dtype=str)
-        
-        # 3. Ler o ESTOQUE.csv anterior dos backups
-        caminho_estoque_antigo = _buscar_csv_estoque_anterior()
-        df_est_antigo = pd.DataFrame()
-        if caminho_estoque_antigo and os.path.exists(caminho_estoque_antigo):
-            df_est_antigo = pd.read_csv(caminho_estoque_antigo, header=None, sep=';', dtype=str)
-
-        # Mapeando histórico de lotes: um dicionário para cada CSV com EAN -> Set de Lotes
-        lotes_atual = _mapear_lotes(df_est_atual)   
-        lotes_antigo = _mapear_lotes(df_est_antigo) 
-        
-        # Mapeando estado do XLSX passado:
-        mapa_datas_antigas = {}
-        mapa_estoque_antigo = {}
-        if df_anterior is not None and not df_anterior.empty:
-            for idx, row in df_anterior.iterrows():
-                ean_str = str(row['EAN']).replace('.0', '').strip()
-                mapa_datas_antigas[ean_str] = row.get('Data Entrada', data_hoje)
-                mapa_estoque_antigo[ean_str] = row.get('Estoque', 0)
-
-        # 4. Avaliar cada linha do dataframe final com as regras de negócio
         datas_entrada = []
         for idx, row in df_final.iterrows():
             ean = str(row['EAN']).replace('.0', '').strip()
-            estoque_final_atual = float(row['Estoque']) if pd.notna(row['Estoque']) else 0
-            
-            data_decidida = data_hoje # Data padrão de entrada
-            
-            # Se já tínhamos esse EAN reportado, vamos verificar a regra
-            if df_anterior is not None and ean in mapa_datas_antigas:
-                data_antiga = mapa_datas_antigas[ean]
-                estoque_antigo = float(mapa_estoque_antigo.get(ean, 0))
-                
-                # Regras: "verifica se o estoque subiu com a entrada de um lote diferente"
-                # A) O estoque aumentou
-                estoque_subiu = estoque_final_atual > estoque_antigo
-                
-                # B) A lista atual de lotes desse EAN tem algum lote que a do CSV antigo não tinha
-                conj_atual = lotes_atual.get(ean, set())
-                conj_antigo = lotes_antigo.get(ean, set())
-                
-                lote_diferente_entrou = len(conj_atual - conj_antigo) > 0
-                
-                # C) Validação principal:
-                if estoque_subiu and lote_diferente_entrou:
-                    data_decidida = data_hoje
-                else:
-                    data_decidida = data_antiga
-            
+            data_decidida = mapa_datas.get(ean, data_hoje)
             datas_entrada.append(data_decidida)
             
         df_final['Data Entrada'] = datas_entrada
         return df_final
 
     except Exception as e:
-        print(f"❌ Erro ao cruzar lotes para identificar Data de Entrada: {e}")
-        # Em caso de falha, assinala hoje para assegurar que não quebre pipeline
-        df_final['Data Entrada'] = datetime.now().strftime('%d/%m/%Y')
+        print(f"❌ Erro ao buscar Data de Entrada no ESTOQUE: {e}")
+        df_final['Data Entrada'] = datetime.now().strftime('%d/%m/%y')
         return df_final
-
-
-def _mapear_lotes(df_estoque):
-    """
-    Constrói um dicionário EAN -> set(Lotes).
-    Para encontrar se há novos lotes em circulação, usando os índices da View.
-    Índice [1]: Codigo_Barras (EAN)
-    Índice [3]: Lote
-    """
-    mapa = {}
-    if df_estoque.empty or len(df_estoque.columns) <= 3:
-        return mapa
-        
-    for index, row in df_estoque.iterrows():
-        try:
-            ean = str(row[1]).replace('.0', '').strip()
-            lote = str(row[3]).strip()
-            
-            if pd.notna(row[1]) and ean:
-                if ean not in mapa:
-                    mapa[ean] = set()
-                mapa[ean].add(lote)
-        except:
-            pass
-            
-    return mapa
-
-
-def _buscar_csv_estoque_anterior():
-    """
-    Busca o ESTOQUE.csv de backup (feito pelas importações diárias) 
-    logo antes ou em data anterior para realizar a comparação dos lotes.
-    """
-    dir_backups = os.path.join('imports', 'backups')
-    padrao = os.path.join(dir_backups, '*', '*', 'ESTOQUE.csv')
-    arquivos = glob.glob(padrao)
-    
-    # Exclui o backup feito hoje, se o backup já foi gerado
-    hoje_str = datetime.now().strftime('%d-%m-%Y')
-    arquivos_antigos = [f for f in arquivos if hoje_str not in f]
-    
-    if not arquivos_antigos:
-        return None
-        
-    arquivos_antigos.sort(key=os.path.getmtime)
-    # Retorna o ESTOQUE.csv encontrado em backup imediatamente mais antigo
-    return arquivos_antigos[-1]

@@ -7,18 +7,18 @@ def processar_validade_estoque(df_estoque):
     # CONFIGURAÇÃO (Baseado na estrutura da View VW_MULTFOCO_ESTOQUE)
     # [0]=Filial_Cnpj, [1]=Codigo_Barras, [2]=Est_Disponivel, [3]=Lote, [4]=Data_Vencimento, [5]=Preco_custo
     INDICE_EAN = 1
-    INDICE_VALIDADE = 4
+    INDICE_VALIDADE = 5
 
     try:
         #Organização de string
         df_estoque[INDICE_EAN] = df_estoque[INDICE_EAN].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
 
         #Conversão de Data
-        # O 'dayfirst=True' é vital para o padrão brasileiro (DD/MM/AAAA)
+        # O 'dayfirst=False' é ideal para o formato da base que é YYYY-MM-DD
         # 'errors=coerce' transforma datas inválidas em NaT (Not a Time)
         df_estoque[INDICE_VALIDADE] = pd.to_datetime(
             df_estoque[INDICE_VALIDADE], 
-            dayfirst=True, 
+            dayfirst=False, 
             errors='coerce'
         )
 

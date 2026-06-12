@@ -25,7 +25,7 @@ def executar_pipeline(main_func):
     except Exception as e:
         logging.error(f"❌ Erro durante execução: {e}")
     
-    logging.info("🕐 Aguardando próximo horário... (a cada 2 horas)")
+    logging.info("🕐 Aguardando próximo horário... (a cada 1 hora)")
 
 
 def iniciar_agendador(main_func):

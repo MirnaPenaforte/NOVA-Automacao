@@ -159,7 +159,7 @@ def main():
             df_final = pd.merge(df_final, faturamento_final, on='EAN', how='outer')
 
             # 2. Adicionar Data de Entrada (dd/mm/aa)
-            df_final = preencher_data_entrada(df_final)
+            df_final = preencher_data_entrada(df_final, df_estoque_bruto.copy())
 
             # 3. Limpeza de Nulos e Tipagem
             colunas_numericas = ['Estoque', 'Mês Atual', 'Faturamento Atual', 'Faturamento M-1']
@@ -202,5 +202,5 @@ if __name__ == "__main__":
     # Executa uma vez imediatamente ao iniciar
     main()
     
-    # Inicia o agendador para rodar a cada 2 horas
+    # Inicia o agendador para rodar a cada 1 hora
     iniciar_agendador(main)
