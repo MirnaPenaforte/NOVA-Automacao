@@ -170,9 +170,10 @@ def main():
             df_final['Mês Atual'] = df_final['Mês Atual'].astype(int)
             df_final['Mês -1'] = df_final['Mês -1'].astype('Int64')
 
-            # Para todo item cujo estoque for 0, o preço de custo passa a ser 0.001
+            # Para todo item cujo estoque for 0, o preço de custo passa a ser 0.001 e a data de entrada fica em branco
             estoque_zero = df_final['Estoque'] == 0
             df_final.loc[estoque_zero, 'Preço Custo'] = 0.001
+            df_final.loc[estoque_zero, 'Data Entrada'] = ""
             
             # Itens restantes sem preço recebem valor numérico 0.001
             df_final['Preço Custo'] = df_final['Preço Custo'].fillna(0.001)
