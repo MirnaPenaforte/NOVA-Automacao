@@ -16,7 +16,7 @@ def agrupar_vendas(df_vendas):
     try:
         # 0. Filtrar CFOPs indesejados
         df_vendas[INDICE_CFOP] = df_vendas[INDICE_CFOP].astype(str).str.strip()
-        df_vendas = df_vendas[~df_vendas[INDICE_CFOP].isin(['6202', '5202'])]
+        df_vendas = df_vendas[~df_vendas[INDICE_CFOP].isin(['6202', '5202','5949','1949'])]
 
         # 1. Limpeza do EAN (Essencial para o groupby encontrar os pares)
         df_vendas[INDICE_EAN] = df_vendas[INDICE_EAN].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
