@@ -9,6 +9,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Porta da API de download dos imports atuais
+EXPOSE 8000
+
 # Instala dependências do sistema e Drivers ODBC (aproveita cache se dependências não mudarem)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \

@@ -7,6 +7,7 @@ Este sistema automatiza todo o ciclo de vida dos dados de Vendas e Estoque da Mu
 - **Inteligência de Data de Entrada:** O sistema descobre a Data de Entrada analisando os lotes do produto no Estoque (indicadores em colunas fixas).
 - **Captura via FTP:** O client FTP automatizado sincroniza planilhas (.csv) hospedadas em servidores parceiros.
 - **Comunicação com API:** O relatório final formatado é despachado para a API administrativa.
+- **API REST de Imports:** disponibiliza as quatro views atuais em um único download.
 - **Agendamento Automático:** O sistema possui um agendador integrado que executa a rotina automaticamente a cada 2 horas.
 - **Backup e Retenção:** Arquivos consumidos são arquivados com timestamp, e backups antigos são limpos automaticamente (30-60 dias).
 
@@ -60,6 +61,14 @@ FTP_HOST="host_ftp"
 FTP_PORT=21
 FTP_USER="usuario_ftp"
 FTP_PASS="senha_ftp"
+
+VIEW_VENDAS="dbo.VW_MULTFOCO_VENDAS"
+VIEW_ESTOQUE="dbo.VW_MULTIFOCO_ESTOQUE"
+VIEW_METAS="dbo.VW_MULTIFOCO_METAS"
+VIEW_VENDEDORES="dbo.VW_MULTIFOCO_VENDEDORES"
+
+# Token Bearer estático usado para proteger o download
+IMPORTS_API_TOKEN="cole-aqui-um-token-longo-e-secreto"
 ```
 
 ## 5. Desenvolvimento Local (Opcional)
@@ -72,3 +81,25 @@ source .venv/bin/activate
 pip install -r requirements.txt
 python3 main.py
 ```
+
+## 6. Download das tabelas atuais
+
+Com a aplicação em execução, o sistema consumidor deve enviar o token configurado
+em `IMPORTS_API_TOKEN` no cabeçalho `Authorization`:
+
+```bash
+curl -OJ \
+  -H "Authorization: Bearer SEU_TOKEN" \
+  http://localhost:8000/imports/atuais
+```
+
+A resposta é um arquivo ZIP contendo as extrações mais recentes das views:
+
+- `VW_MULTFOCO_VENDAS.csv`
+- `VW_MULTIFOCO_ESTOQUE.csv`
+- `VW_MULTIFOCO_METAS.csv`
+- `VW_MULTIFOCO_VENDEDORES.csv`
+
+As quatro views são atualizadas a cada execução agendada da automação.
+O host e a porta podem ser alterados pelas variáveis `IMPORTS_API_HOST` e `IMPORTS_API_PORT`.
+O token é estático e não expira automaticamente; para trocá-lo, atualize o `.env` e reinicie a aplicação.

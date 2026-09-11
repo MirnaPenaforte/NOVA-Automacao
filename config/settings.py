@@ -42,9 +42,9 @@ class Settings:
 
     # --- Nomes das Views ---
     VIEW_VENDAS = os.getenv("VIEW_VENDAS", "")
-    VIEW_VENDAS_MATRIZ = os.getenv("VIEW_VENDAS_MATRIZ", "")
     VIEW_ESTOQUE = os.getenv("VIEW_ESTOQUE", "")
-    VIEW_ESTOQUE_MATRIZ = os.getenv("VIEW_ESTOQUE_MATRIZ", "")
+    VIEW_METAS = os.getenv("VIEW_METAS", "")
+    VIEW_VENDEDORES = os.getenv("VIEW_VENDEDORES", "")
 
     # --- Configurações de Armazenamento ---
     MAX_FILES_RETAINED = 3

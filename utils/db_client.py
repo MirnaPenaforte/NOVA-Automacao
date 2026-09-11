@@ -18,6 +18,8 @@ DB_PASS   = os.getenv("DB_PASS")
 # --- Nomes das Views (via .env) ---
 VIEW_VENDAS  = os.getenv("VIEW_VENDAS",  "dbo.VW_MULTFOCO_VENDAS")
 VIEW_ESTOQUE = os.getenv("VIEW_ESTOQUE", "dbo.VW_MULTIFOCO_ESTOQUE")
+VIEW_METAS = os.getenv("VIEW_METAS", "dbo.VW_MULTIFOCO_METAS")
+VIEW_VENDEDORES = os.getenv("VIEW_VENDEDORES", "dbo.VW_MULTIFOCO_VENDEDORES")
 
 # --- Configurações de Filtros ---
 CNPJS_PERMITIDOS_ENV = os.getenv("CNPJS_PERMITIDOS")
@@ -29,6 +31,8 @@ DIRETORIO_IMPORTS = "imports"
 # --- Nome dos arquivos CSV gerados (sem extensão) ---
 NOME_ARQUIVO_VENDAS  = "VENDA"
 NOME_ARQUIVO_ESTOQUE = "ESTOQUE"
+NOME_ARQUIVO_METAS = "METAS"
+NOME_ARQUIVO_VENDEDORES = "VENDEDORES"
 
 # --- Query segura para a view de VENDAS ---
 # A coluna Saida_Valor_Unitario_Item causa erro 8114 (varchar→numeric) dentro
@@ -128,14 +132,17 @@ def _salvar_csv(df: pd.DataFrame, nome_base: str) -> str:
     data_str = datetime.now().strftime("%d-%m-%Y")
     nome_arquivo = f"{nome_base}_{data_str}.csv"
     caminho = os.path.join(DIRETORIO_IMPORTS, nome_arquivo)
+    caminho_temporario = f"{caminho}.tmp"
 
     df.to_csv(
-        caminho,
+        caminho_temporario,
         sep=";",
         index=False,
         header=False,
         encoding="latin-1",
     )
+    # A troca atômica impede que a API entregue um arquivo parcialmente escrito.
+    os.replace(caminho_temporario, caminho)
     print(f"📥 Arquivo salvo: {caminho}  ({len(df)} linhas)")
     return caminho
 
@@ -311,11 +318,11 @@ def filtrar_estoque_atual(caminho_estoque_bruto: str) -> str:
 
 def buscar_dados_views() -> list[str]:
     """
-    Conecta ao SQL Server e extrai dados das views de Vendas e Estoque,
+    Conecta ao SQL Server e extrai dados das quatro views da integração,
     salvando cada uma como arquivo .csv na pasta /imports.
 
     Regras de negócio aplicadas:
-      - Os arquivos são nomeados  VENDA_DD-MM-AAAA.csv e ESTOQUE_DD-MM-AAAA.csv
+      - Gera arquivos de VENDA, ESTOQUE, METAS e VENDEDORES
       - Separador ';', encoding 'latin-1', sem cabeçalho
       - A pasta /imports é criada automaticamente se não existir
       - Em caso de view vazia, o arquivo NÃO é gerado e um aviso é exibido
@@ -331,15 +338,17 @@ def buscar_dados_views() -> list[str]:
     print("\n🔌 Iniciando conexão com o banco de dados...")
     conn = _get_connection()
 
-    # Mapeamento: (nome_base, query_a_executar)
+    # Mapeamento: (nome do arquivo, nome da view, query a executar)
     views = [
-        (NOME_ARQUIVO_VENDAS,  QUERY_VENDAS.format(view=VIEW_VENDAS)),
-        (NOME_ARQUIVO_ESTOQUE, f"SELECT * FROM {VIEW_ESTOQUE}"),
+        (NOME_ARQUIVO_VENDAS, VIEW_VENDAS, QUERY_VENDAS.format(view=VIEW_VENDAS)),
+        (NOME_ARQUIVO_ESTOQUE, VIEW_ESTOQUE, f"SELECT * FROM {VIEW_ESTOQUE}"),
+        (NOME_ARQUIVO_METAS, VIEW_METAS, f"SELECT * FROM {VIEW_METAS}"),
+        (NOME_ARQUIVO_VENDEDORES, VIEW_VENDEDORES, f"SELECT * FROM {VIEW_VENDEDORES}"),
     ]
 
     try:
-        for nome_base, query in views:
-            print(f"\n📊 Extraindo '{nome_base}' de '{VIEW_VENDAS if nome_base == NOME_ARQUIVO_VENDAS else VIEW_ESTOQUE}'...")
+        for nome_base, nome_view, query in views:
+            print(f"\n📊 Extraindo '{nome_base}' de '{nome_view}'...")
             try:
                 df = _executar_query(conn, query)
 
@@ -349,8 +358,11 @@ def buscar_dados_views() -> list[str]:
 
                 # --- LIMPEZA DE EAN (Garante que códigos de 14 dígitos não virem floats) ---
                 # Vendas: EAN está no índice 6. Estoque: EAN está no índice 1.
-                idx_ean = 6 if nome_base == NOME_ARQUIVO_VENDAS else 1
-                if len(df.columns) > idx_ean:
+                idx_ean = {
+                    NOME_ARQUIVO_VENDAS: 6,
+                    NOME_ARQUIVO_ESTOQUE: 1,
+                }.get(nome_base)
+                if idx_ean is not None and len(df.columns) > idx_ean:
                     col_ean = df.columns[idx_ean]
                     # Converte para string e remove o ".0" que o pandas/sql pode inserir em números grandes
                     df[col_ean] = df[col_ean].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()

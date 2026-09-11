@@ -1,7 +1,10 @@
 
 import os
 import sys
+import threading
 import pandas as pd
+import uvicorn
+from api import app
 from core.read_Csv import ler_csv_sem_header
 from core.Col_estoque import processar_estoque_agrupado
 from core.Col_data_validade import processar_validade_estoque
@@ -14,6 +17,13 @@ from utils.controler_import import arquivar_arquivos_importacao
 from utils.api_client import enviar_ultimo_relatorio
 from utils.db_client import buscar_dados_views, filtrar_vendas_periodo_atual, filtrar_estoque_atual
 from utils.Disparo import iniciar_agendador
+
+
+def iniciar_api():
+    """Inicia a API em segundo plano junto com o processo da automação."""
+    host = os.getenv("IMPORTS_API_HOST", "0.0.0.0")
+    port = int(os.getenv("IMPORTS_API_PORT", "8000"))
+    uvicorn.run(app, host=host, port=port, log_level="info")
 
 def main():
     diretorio_imports = 'imports'
@@ -41,8 +51,14 @@ def main():
             print(f"❌ Erro inesperado na extração: {e}")
             return
 
-        venda_bruta_path = next((f for f in arquivos_baixados if 'VENDA' in os.path.basename(f).upper()), None)
-        estoque_path     = next((f for f in arquivos_baixados if 'ESTOQUE' in os.path.basename(f).upper()), None)
+        venda_bruta_path = next(
+            (f for f in arquivos_baixados if os.path.basename(f).upper().startswith('VENDA_')),
+            None,
+        )
+        estoque_path = next(
+            (f for f in arquivos_baixados if os.path.basename(f).upper().startswith('ESTOQUE_')),
+            None,
+        )
 
         if not venda_bruta_path or not estoque_path:
             print("❌ Erro: Arquivos de VENDA ou ESTOQUE não encontrados na extração.")
@@ -124,16 +140,8 @@ def main():
     print("Iniciando rotina de backup dos arquivos importados do dia...")
     arquivar_arquivos_importacao(diretorio_imports)
 
-    # Remover os arquivos brutos apenas quando veio do banco
-    # (em modo offline, preservamos os arquivos originais da pasta)
-    if USE_BANCO:
-        try:
-            os.remove(venda_bruta_path)
-            print(f"🗑️  Arquivo bruto removido: {venda_bruta_path}")
-            os.remove(estoque_path)
-            print(f"🗑️  Arquivo bruto removido: {estoque_path}")
-        except OSError:
-            pass
+    # Os arquivos brutos são preservados porque a API os disponibiliza
+    # ao sistema consumidor junto com METAS e VENDEDORES.
 
     df_vendas_bruto = ler_csv_sem_header(venda_path)
     df_estoque_bruto = ler_csv_sem_header(estoque_atual_path)
@@ -200,6 +208,8 @@ def main():
         print("❌ Erro fatal: Verifique se os arquivos VENDA.csv e ESTOQUE.csv estão na pasta /imports.")
 
 if __name__ == "__main__":
+    threading.Thread(target=iniciar_api, daemon=True, name="imports-api").start()
+
     # Executa uma vez imediatamente ao iniciar
     main()
     
