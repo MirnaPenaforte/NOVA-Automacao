@@ -9,7 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Porta da API de download dos imports atuais
+# Porta da API de consulta dos imports atuais
 EXPOSE 8000
 
 # Instala dependências do sistema e Drivers ODBC (aproveita cache se dependências não mudarem)

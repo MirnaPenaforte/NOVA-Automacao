@@ -1,3 +1,4 @@
+import json
 import os
 import pandas as pd
 import pyodbc
@@ -22,7 +23,7 @@ VIEW_METAS = os.getenv("VIEW_METAS", "dbo.VW_MULTIFOCO_METAS")
 VIEW_VENDEDORES = os.getenv("VIEW_VENDEDORES", "dbo.VW_MULTIFOCO_VENDEDORES")
 
 # --- Configurações de Filtros ---
-CNPJS_PERMITIDOS_ENV = os.getenv("CNPJS_PERMITIDOS")
+CNPJS_PERMITIDOS_ENV = os.getenv("CNPJS_PERMITIDOS", "")
 CNPJS_PERMITIDOS_LIST = [c.strip() for c in CNPJS_PERMITIDOS_ENV.split(",") if c.strip()]
 
 # --- Pasta de destino dos arquivos baixados ---
@@ -133,6 +134,8 @@ def _salvar_csv(df: pd.DataFrame, nome_base: str) -> str:
     nome_arquivo = f"{nome_base}_{data_str}.csv"
     caminho = os.path.join(DIRETORIO_IMPORTS, nome_arquivo)
     caminho_temporario = f"{caminho}.tmp"
+    caminho_colunas = os.path.splitext(caminho)[0] + ".columns.json"
+    caminho_colunas_temporario = f"{caminho_colunas}.tmp"
 
     df.to_csv(
         caminho_temporario,
@@ -143,6 +146,18 @@ def _salvar_csv(df: pd.DataFrame, nome_base: str) -> str:
     )
     # A troca atômica impede que a API entregue um arquivo parcialmente escrito.
     os.replace(caminho_temporario, caminho)
+
+    # O CSV continua sem cabeçalho para não alterar os processamentos existentes.
+    # O esquema separado permite que a API forme objetos JSON com os nomes reais
+    # retornados pelas views do SQL Server.
+    with open(caminho_colunas_temporario, "w", encoding="utf-8") as arquivo_colunas:
+        json.dump(
+            [str(coluna) for coluna in df.columns],
+            arquivo_colunas,
+            ensure_ascii=False,
+        )
+    os.replace(caminho_colunas_temporario, caminho_colunas)
+
     print(f"📥 Arquivo salvo: {caminho}  ({len(df)} linhas)")
     return caminho
 
@@ -325,15 +340,16 @@ def buscar_dados_views() -> list[str]:
       - Gera arquivos de VENDA, ESTOQUE, METAS e VENDEDORES
       - Separador ';', encoding 'latin-1', sem cabeçalho
       - A pasta /imports é criada automaticamente se não existir
-      - Em caso de view vazia, o arquivo NÃO é gerado e um aviso é exibido
+      - A extração só é considerada concluída quando as quatro views geram dados
 
     Retorna:
-        lista com os caminhos dos arquivos gerados (pode estar vazia em caso de falha).
+        lista com os quatro caminhos gerados.
 
     Lança:
-        RuntimeError — se a conexão com o banco falhar.
+        RuntimeError — se a conexão falhar ou alguma view não gerar dados.
     """
     arquivos_gerados = []
+    falhas = []
 
     print("\n🔌 Iniciando conexão com o banco de dados...")
     conn = _get_connection()
@@ -353,7 +369,9 @@ def buscar_dados_views() -> list[str]:
                 df = _executar_query(conn, query)
 
                 if df.empty:
-                    print(f"⚠️  Query retornou 0 registros — arquivo não será gerado.")
+                    mensagem = "query retornou 0 registros"
+                    print(f"❌ {mensagem.capitalize()} — arquivo não será gerado.")
+                    falhas.append(f"{nome_base}: {mensagem}")
                     continue
 
                 # --- LIMPEZA DE EAN (Garante que códigos de 14 dígitos não virem floats) ---
@@ -373,9 +391,30 @@ def buscar_dados_views() -> list[str]:
 
             except Exception as e:
                 print(f"❌ Erro ao extrair '{nome_base}': {e}")
+                falhas.append(f"{nome_base}: {e}")
 
     finally:
         conn.close()
         print("\n🔒 Conexão com o banco encerrada.")
+
+    if falhas:
+        detalhes = "; ".join(falhas)
+        raise RuntimeError(f"Extração incompleta das views — {detalhes}")
+
+    esperados = {
+        NOME_ARQUIVO_VENDAS,
+        NOME_ARQUIVO_ESTOQUE,
+        NOME_ARQUIVO_METAS,
+        NOME_ARQUIVO_VENDEDORES,
+    }
+    gerados = {
+        os.path.basename(caminho).split("_", maxsplit=1)[0]
+        for caminho in arquivos_gerados
+    }
+    ausentes = sorted(esperados - gerados)
+    if ausentes:
+        raise RuntimeError(
+            f"Extração incompleta: arquivos ausentes — {', '.join(ausentes)}"
+        )
 
     return arquivos_gerados

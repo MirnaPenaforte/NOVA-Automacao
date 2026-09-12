@@ -40,8 +40,17 @@ def main():
         print("\n--- Extração de dados das Views ---")
         try:
             arquivos_baixados = buscar_dados_views()
-            if not arquivos_baixados:
-                print("⚠️ Aviso: Nenhum dado retornado das Views. A rotina será encerrada.")
+            prefixos_gerados = {
+                os.path.basename(caminho).split("_", maxsplit=1)[0]
+                for caminho in arquivos_baixados
+            }
+            prefixos_esperados = {"VENDA", "ESTOQUE", "METAS", "VENDEDORES"}
+            ausentes = sorted(prefixos_esperados - prefixos_gerados)
+            if ausentes:
+                print(
+                    "❌ Extração incompleta. Arquivos ausentes: "
+                    + ", ".join(ausentes)
+                )
                 return
         except RuntimeError as e:
             print(f"❌ Erro crítico na conexão: {e}")
