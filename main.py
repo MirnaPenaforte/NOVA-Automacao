@@ -21,8 +21,22 @@ from utils.Disparo import iniciar_agendador
 
 def iniciar_api():
     """Inicia a API em segundo plano junto com o processo da automação."""
-    host = os.getenv("IMPORTS_API_HOST", "0.0.0.0")
-    port = int(os.getenv("IMPORTS_API_PORT", "8000"))
+    host = os.getenv("IMPORTS_API_HOST", "0.0.0.0").strip() or "0.0.0.0"
+    valor_porta = os.getenv("IMPORTS_API_PORT", "8000").strip() or "8000"
+
+    try:
+        port = int(valor_porta)
+    except ValueError as erro:
+        raise RuntimeError(
+            f"IMPORTS_API_PORT inválida: '{valor_porta}'. Use um número entre 1 e 65535."
+        ) from erro
+
+    if not 1 <= port <= 65535:
+        raise RuntimeError(
+            f"IMPORTS_API_PORT inválida: '{port}'. Use um número entre 1 e 65535."
+        )
+
+    print(f"🌐 API de imports iniciando em {host}:{port}")
     uvicorn.run(app, host=host, port=port, log_level="info")
 
 def main():

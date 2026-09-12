@@ -69,6 +69,10 @@ VIEW_VENDEDORES="dbo.VW_MULTIFOCO_VENDEDORES"
 
 # Token Bearer estático usado para proteger a consulta
 IMPORTS_API_TOKEN="cole-aqui-um-token-longo-e-secreto"
+
+# Bind da API desta instância
+IMPORTS_API_HOST="0.0.0.0"
+IMPORTS_API_PORT=8000
 ```
 
 ## 5. Desenvolvimento Local (Opcional)
@@ -119,3 +123,6 @@ curl -OJ \
 As quatro views são atualizadas a cada execução agendada da automação.
 O host e a porta podem ser alterados pelas variáveis `IMPORTS_API_HOST` e `IMPORTS_API_PORT`.
 O token é estático e não expira automaticamente; para trocá-lo, atualize o `.env` e reinicie a aplicação.
+
+Em um servidor com múltiplas instâncias usando `network_mode: host`, configure uma porta
+diferente manualmente no `.env` de cada instância.

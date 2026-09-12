@@ -9,8 +9,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Porta da API de consulta dos imports atuais
-EXPOSE 8000
+# A porta real é definida por IMPORTS_API_PORT no .env e usada pelo Uvicorn.
+# Não há EXPOSE fixo porque o compose usa network_mode: host.
 
 # Instala dependências do sistema e Drivers ODBC (aproveita cache se dependências não mudarem)
 RUN apt-get update && apt-get install -y --no-install-recommends \
