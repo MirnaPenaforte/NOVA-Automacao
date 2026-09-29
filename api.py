@@ -65,6 +65,11 @@ COLUNAS_LEGADAS = {
 }
 
 
+# Campos convertidos para número inteiro no JSON; valores não numéricos
+# permanecem como texto.
+CAMPOS_INTEIROS = {"Saida_Quantidade"}
+
+
 def validar_token_bearer(
     credenciais: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
 ) -> None:
@@ -162,6 +167,19 @@ def _obter_colunas(arquivo: Path, prefixo: str) -> list[str]:
     return _normalizar_colunas(colunas, len(primeira_linha))
 
 
+def _converter_valor(
+    coluna: str,
+    valor: str | None,
+) -> str | int | None:
+    """Converte campos numéricos conhecidos; demais valores seguem como texto."""
+    if valor is None or coluna not in CAMPOS_INTEIROS:
+        return valor
+    try:
+        return int(float(valor.replace(",", ".")))
+    except (ValueError, TypeError):
+        return valor
+
+
 def _gerar_json(
     tabelas: dict[str, tuple[Path, list[str]]],
 ) -> Iterator[str]:
@@ -185,10 +203,13 @@ def _gerar_json(
                 if indice_linha:
                     adicionar(",")
                 registro = {
-                    coluna: (
-                        linha[indice]
-                        if indice < len(linha) and linha[indice] != ""
-                        else None
+                    coluna: _converter_valor(
+                        coluna,
+                        (
+                            linha[indice]
+                            if indice < len(linha) and linha[indice] != ""
+                            else None
+                        ),
                     )
                     for indice, coluna in enumerate(colunas)
                 }
