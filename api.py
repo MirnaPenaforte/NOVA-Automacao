@@ -3,11 +3,14 @@
 import csv
 import json
 import os
+import re
 import secrets
 from collections.abc import Iterator
 from datetime import datetime
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from zoneinfo import ZoneInfo
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from dotenv import load_dotenv
@@ -68,6 +71,36 @@ COLUNAS_LEGADAS = {
 # Campos convertidos para número inteiro no JSON; valores não numéricos
 # permanecem como texto.
 CAMPOS_INTEIROS = {"Saida_Quantidade"}
+CAMPOS_DECIMAIS = {
+    "Valor",
+    "Saida_Valor_Unitario_Item",
+    "Preco_custo",
+    "Preco_Custo",
+}
+CAMPOS_DATA = {
+    "Data",
+    "Saida_Data_Venda",
+    "Data_Entrada",
+    "Data_Vencimento",
+    "Data_Validade",
+}
+COLUNAS_ANO_VIGENTE = {
+    "METAS": "Data",
+    "VENDAS": "Saida_Data_Venda",
+}
+
+
+def _ano_vigente() -> int:
+    return datetime.now(ZoneInfo("America/Sao_Paulo")).year
+
+
+def _ler_data(valor: str) -> datetime | None:
+    for formato in ("%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(valor, formato)
+        except ValueError:
+            continue
+    return None
 
 
 def validar_token_bearer(
@@ -171,8 +204,24 @@ def _converter_valor(
     coluna: str,
     valor: str | None,
 ) -> str | int | None:
-    """Converte campos numéricos conhecidos; demais valores seguem como texto."""
-    if valor is None or coluna not in CAMPOS_INTEIROS:
+    """Formata datas e números conhecidos; demais valores seguem como texto."""
+    if valor is None:
+        return valor
+    if coluna == "Cliente_Codigo":
+        codigo_com_decimal = re.fullmatch(r"(\d+)\.0+", valor)
+        return codigo_com_decimal.group(1) if codigo_com_decimal else valor
+    if coluna in CAMPOS_DATA:
+        data = _ler_data(valor)
+        return data.strftime("%d/%m/%Y") if data else valor
+    if coluna in CAMPOS_DECIMAIS:
+        try:
+            numero = Decimal(valor.replace(",", "."))
+            if numero.is_finite():
+                return f"{numero.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP):.2f}"
+        except InvalidOperation:
+            pass
+        return valor
+    if coluna not in CAMPOS_INTEIROS:
         return valor
     try:
         return int(float(valor.replace(",", ".")))
@@ -184,6 +233,7 @@ def _gerar_json(
     tabelas: dict[str, tuple[Path, list[str]]],
 ) -> Iterator[str]:
     """Gera o documento aos poucos para não carregar todas as vendas na memória."""
+    ano_vigente = _ano_vigente()
     partes = ["{"]
     tamanho_buffer = 1
 
@@ -197,11 +247,23 @@ def _gerar_json(
             adicionar(",")
         adicionar(f"{json.dumps(categoria)}:[")
 
+        coluna_data = COLUNAS_ANO_VIGENTE.get(categoria)
+        indice_data = colunas.index(coluna_data) if coluna_data in colunas else None
+        primeiro_registro = True
         with arquivo.open("r", encoding="latin-1", newline="") as csv_file:
             leitor = csv.reader(csv_file, delimiter=";")
-            for indice_linha, linha in enumerate(leitor):
-                if indice_linha:
+            for linha in leitor:
+                if coluna_data:
+                    data = (
+                        _ler_data(linha[indice_data])
+                        if indice_data is not None and indice_data < len(linha)
+                        else None
+                    )
+                    if data is None or data.year != ano_vigente:
+                        continue
+                if not primeiro_registro:
                     adicionar(",")
+                primeiro_registro = False
                 registro = {
                     coluna: _converter_valor(
                         coluna,

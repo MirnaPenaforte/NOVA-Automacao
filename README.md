@@ -112,6 +112,13 @@ Os valores são retornados como texto para preservar códigos, EANs, CNPJs e zer
 esquerda. Campos vazios são retornados como `null`. O endpoint transmite o JSON em
 fluxo, evitando manter toda a tabela de vendas na memória.
 
+No JSON, `METAS` é filtrado pela coluna `Data` e `VENDAS` por
+`Saida_Data_Venda`, mantendo somente registros do ano vigente em
+`America/Sao_Paulo`. O ano é calculado a cada consulta, inclusive após a virada
+do ano. `ESTOQUE` mantém os itens disponíveis independentemente do ano de
+entrada; `VENDEDORES` não possui coluna de data. O download ZIP continua com as
+extrações brutas.
+
 Se ainda for necessário baixar os quatro CSVs em um arquivo ZIP:
 
 ```bash
